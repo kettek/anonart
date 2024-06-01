@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Anonoart</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+    <style>
+      html {
+        overscroll-behavior: none;
+      }
+      canvas {
+        border: 1px solid black;
+        touch-action: none;
+      }
+      input[type='number'] {
+        width: 3em;
+      }
+      fieldset {
+        text-align: center;
+      }
+    </style>
+</head>
+<body>
+  <section>
+    <fieldset>
+      <legend>Options</legend>
+      <menu>
+        <input type="color"/>
+        <input type="range" min=1 max=32 value=1 step=1/>
+        <input type='number' min=1 max=32 value=1 step=1/>
+        <label>
+          <input type='radio' name='tool' value='pencil' checked>
+          Pencil
+        </label>
+        <label>
+          <input type='radio' name='tool' value='fill'>
+          Fill
+        </label>
+        <label>
+          <input type='radio' name='tool' value='eraser'>
+          Eraser
+        </label>
+        <button>Clear</button>
+      </menu>
+      <menu class='canvasOptions'>
+        <input type='number' min=1 max=256 value=48 step=1>
+        x
+        <input type='number' min=1 max=256 value=48 step=1>
+        <label>
+          <input type='number' min=1 max=100 value=4 step=1>
+          zoom
+        </label>
+      </menu>
+    </fieldset>
+    <fieldset>
+      <legend>Canvas</legend>
+      <canvas width="48" height="48"></canvas>
+      <br/>
+      <button id='copy'>Copy URL</button>
+    </fieldset>
+    <aside>
+      <fieldset>
+        <legend>URL Length Limits</legend>
+        <article>
+          Current: <span id='current'>0</span>
+        </article>
+        <article>
+          Discord: 1997
+        </article>
+        <article>
+          Google Chat: 4093
+        </article>
+        <article>
+          Steam: 4997
+        </article>
+      </fieldset>
+    </aside>
+  </section>
+  <script src="art.js"></script>
+</body>
+</html>
