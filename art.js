@@ -16,7 +16,9 @@
   const currentCount = document.querySelector('#current')
   const sizeInputs = canvasMenu.querySelectorAll('input[type="number"]')
   const copyButton = document.querySelector('#copy')
+  const versionCheckbox = document.querySelector('input[type="checkbox"]')
   
+  let version = versionCheckbox.checked ? 2 : 1
   let zoom = 4
   
   let currentAction = 'color'
@@ -48,11 +50,11 @@
   })
   sizeInputs[0].addEventListener('input', (e) => {
     resizeCanvas(e.currentTarget.value, canvas.height)
-    updateRLE()
+    updateRLE(version)
   })
   sizeInputs[1].addEventListener('input', (e) => {
     resizeCanvas(canvas.width, e.currentTarget.value)
-    updateRLE()
+    updateRLE(version)
   })
   sizeInputs[2].addEventListener('input', (e) => {
     zoom = e.currentTarget.value
@@ -61,6 +63,10 @@
   copyButton.addEventListener('click', (e) => {
     let urlPath = window.location.host + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') ) + window.location.hash
     navigator.clipboard.writeText(urlPath)
+  })
+  versionCheckbox.addEventListener('change', (e) => {
+    version = e.currentTarget.checked ? 2 : 1
+    updateRLE(version)
   })
   
   let currX = 0
@@ -220,7 +226,7 @@
   const pointerUp = (e) => {
     e.preventDefault()
     outCanvas.releasePointerCapture(e.pointerId)
-    updateRLE()
+    updateRLE(version)
     window.removeEventListener('pointermove', pointerMove)
     window.removeEventListener('pointerup', pointerUp)
   }
@@ -230,7 +236,7 @@
     currentCount.textContent = urlPath.length
   }
   
-  const updateRLE = async () => {
+  const updateRLE = async (version) => {
     const idat = ctx.getImageData(0, 0, canvas.width, canvas.height)
     // color palette
     let colors = [] // rgb stored as [..., r,g,b]
@@ -255,9 +261,14 @@
         colors.push(r, g, b)
       }
     }
-    // Get palette count as a 16-bit number.
+    // Get palette count as a 16-bit number if version 1, or 8-bit if version 2.
     let colorCount = colors.length / 3
-    let [high, low] = getAs16Bit(colorCount)
+    let colorCountArray = [[]]
+    if (version === 1) {
+      colorCountArray = getAs16Bit(colorCount)
+    } else {
+      colorCountArray = [colorCount]
+    }
 
     let rle = []
     let lastColor = [255,255,255]
@@ -271,8 +282,13 @@
       } else {
         let [highCount, lowCount] = getAs16Bit(count)
         let index = getPaletteIndex(lastColor[0], lastColor[1], lastColor[2])
-        let [highIndex, lowIndex] = getAs16Bit(index)
-        rle.push(highCount, lowCount, highIndex, lowIndex)
+        let indexArray = []
+        if (version === 1) {
+          indexArray = getAs16Bit(index)
+        } else {
+          indexArray = [index]
+        }
+        rle.push(highCount, lowCount, ...indexArray)
         count = 1
         lastColor = [r, g, b]
       }
@@ -280,8 +296,13 @@
     if (count > 1) {
       let [highCount, lowCount] = getAs16Bit(count)
       let index = getPaletteIndex(lastColor[0], lastColor[1], lastColor[2])
-      let [highIndex, lowIndex] = getAs16Bit(index)
-      rle.push(highCount, lowCount, highIndex, lowIndex)
+      let indexArray = []
+      if (version === 1) {
+        indexArray = getAs16Bit(index)
+      } else {
+        indexArray = [index]
+      }
+      rle.push(highCount, lowCount, ...indexArray)
     }
 
     async function bytesToBase64DataUrl(bytes, type = "application/octet-stream") {
@@ -294,28 +315,43 @@
       });
     }
     
-    let bytes = Uint8Array.from([canvas.width-1, canvas.height-1, high, low, ...colors, ...rle])
+    let bytes = Uint8Array.from([canvas.width-1, canvas.height-1, ...colorCountArray, ...colors, ...rle])
     let b64 = (await bytesToBase64DataUrl(bytes)).slice('data:application/octet-stream;base64,'.length)
     
-    window.location.hash = b64
+    window.location.hash = b64 + (version === 1 ? '1' : '')
     updateCount()
   }
   
-  const loadRLE = (rle) => {
+  const loadRLE = (rle, version) => {
     ctx = canvas.getContext('2d')
+    console.log(version, rle)
     let rleArr = [...Uint8Array.from(atob(rle), m=>m.codePointAt(0))]
 
     canvas.width = rleArr.shift() + 1
     canvas.height = rleArr.shift() + 1
-    let colors = rleArr.shift() * 256 + rleArr.shift()
-    let palette = rleArr.splice(0, colors * 3)
+    
+    let colors = 0
+    let palette = []
+    
+    if (version === 1) {
+      colors = rleArr.shift() * 256 + rleArr.shift()
+    } else {
+      colors = rleArr.shift()
+    }
+    palette = rleArr.splice(0, colors * 3)
+
     let idat = ctx.createImageData(canvas.width, canvas.height)
     let i = 0
     let x = 0
     let y = 0
     while (rleArr.length) {
       let count = rleArr.shift() * 256 + rleArr.shift()
-      let color = (rleArr.shift() * 256 + rleArr.shift()) * 3
+      let color = 0
+      if (version === 1) {
+        color = rleArr.shift() * 256 + rleArr.shift() * 3
+      } else {
+        color = rleArr.shift() * 3
+      }
       let r = palette[color]
       let g = palette[color + 1]
       let b = palette[color + 2]
@@ -340,8 +376,16 @@
 
   resizeCanvas(sizeInputs[0].value, sizeInputs[1].value)
   
-  if (window.location.hash !== '') {
-    loadRLE(window.location.hash.slice(1))
+  let hash = window.location.hash
+  if (hash !== '') {
+    if (hash.endsWith('1')) {
+      version = 1
+      hash = hash.slice(0, -1)
+    } else {
+      version = 2
+    }
+    versionCheckbox.checked = version !== 1
+    loadRLE(hash.slice(1), version)
     sizeInputs[0].value = canvas.width
     sizeInputs[1].value = canvas.height
   }
