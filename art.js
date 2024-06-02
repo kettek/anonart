@@ -16,7 +16,7 @@
   const currentCount = document.querySelector('#current')
   const sizeInputs = canvasMenu.querySelectorAll('input[type="number"]')
   const copyButton = document.querySelector('#copy')
-  const versionCheckbox = document.querySelector('input[type="checkbox"]')
+  const versionCheckbox = document.querySelector('#version')
   
   let version = versionCheckbox.checked ? 2 : 1
   let zoom = 4
@@ -273,36 +273,37 @@
     let rle = []
     let lastColor = [255,255,255]
     let count = 0
+    const pushCount = (r, g, b) => {
+      let countArray = []
+      let indexArray = []
+      let index = getPaletteIndex(lastColor[0], lastColor[1], lastColor[2])
+      if (version !== 1) {
+        countArray = [count-1]
+        indexArray = [index]
+      } else {
+        countArray = getAs16Bit(count-1)
+        indexArray = getAs16Bit(index)
+      }
+      rle.push(...countArray, ...indexArray)
+      count = 1
+      lastColor = [r, g, b]
+    }
     for (let i = 0; i < idat.data.length; i += 4) {
       let r = idat.data[i]
       let g = idat.data[i + 1]
       let b = idat.data[i + 2]
+      if (count >= 256) {
+        pushCount(r, g, b)
+        continue
+      }
       if (r === lastColor[0] && g === lastColor[1] && b === lastColor[2]) {
         count++
       } else {
-        let [highCount, lowCount] = getAs16Bit(count)
-        let index = getPaletteIndex(lastColor[0], lastColor[1], lastColor[2])
-        let indexArray = []
-        if (version === 1) {
-          indexArray = getAs16Bit(index)
-        } else {
-          indexArray = [index]
-        }
-        rle.push(highCount, lowCount, ...indexArray)
-        count = 1
-        lastColor = [r, g, b]
+        pushCount(r, g, b)
       }
     }
     if (count > 1) {
-      let [highCount, lowCount] = getAs16Bit(count)
-      let index = getPaletteIndex(lastColor[0], lastColor[1], lastColor[2])
-      let indexArray = []
-      if (version === 1) {
-        indexArray = getAs16Bit(index)
-      } else {
-        indexArray = [index]
-      }
-      rle.push(highCount, lowCount, ...indexArray)
+      pushCount(lastColor[0], lastColor[1], lastColor[2])
     }
 
     async function bytesToBase64DataUrl(bytes, type = "application/octet-stream") {
@@ -345,11 +346,13 @@
     let x = 0
     let y = 0
     while (rleArr.length) {
-      let count = rleArr.shift() * 256 + rleArr.shift()
+      let count = 0
       let color = 0
       if (version === 1) {
+        count = rleArr.shift() * 256 + rleArr.shift() + 1
         color = rleArr.shift() * 256 + rleArr.shift() * 3
       } else {
+        count = rleArr.shift() + 1
         color = rleArr.shift() * 3
       }
       let r = palette[color]
